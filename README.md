@@ -77,8 +77,9 @@ Credentials are stored locally in `~/.claude/linkedin.local.md` (excluded from v
 
 ## Known API Limitations
 
-- **Silent text truncation**: LinkedIn's Posts API may silently truncate `commentary` text server-side. No error is returned. The plugin automatically verifies post text after creation.
-- **PARTIAL_UPDATE unreliable**: The REST API's `PARTIAL_UPDATE` for commentary returns 204 but may not update the text. If truncation occurs, edit via LinkedIn's web UI.
+- **Silent text truncation**: LinkedIn's Posts API may silently truncate `commentary` text server-side. No error is returned - the post is created successfully but with shortened text. This has been observed on multi-image and article posts. The plugin automatically verifies post text after creation when possible.
+- **PARTIAL_UPDATE unreliable**: The REST API's `PARTIAL_UPDATE` for commentary returns 204 but does not actually update the text. Do not rely on it to fix truncated posts.
+- **Browser-edit workaround**: If truncation occurs, the plugin can fix it by opening the post in LinkedIn's web UI via Playwright, clicking "Edit post", appending the missing text with `keyboard.insertText()`, and saving. LinkedIn's internal web API correctly handles the full text update.
 - **Always use --text-file**: The plugin writes post text to a temp file internally to avoid shell quoting issues and ensure the full text is sent to the API.
 
 ## Comments API
