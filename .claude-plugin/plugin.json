@@ -1,0 +1,9 @@
+{
+  "name": "linkedin",
+  "version": "0.1.0",
+  "description": "Post to LinkedIn directly from Claude Code - text, images, and articles",
+  "author": {
+    "name": "OpenWLAN"
+  },
+  "license": "MIT"
+}
