@@ -49,22 +49,38 @@ Content-Type: application/json
 ### Recommended workflow for long posts:
 
 1. **Always validate text length** before posting using `validate_text_length()` (built into linkedin-api.py)
-2. **Under 3000 chars**: Safe to post via API directly
-3. **Over 3000 chars**: Use `--preview` mode:
-   - Uploads images to LinkedIn (returns URNs)
-   - Validates text length (prints warning)
-   - Does NOT create the post
-   - Prints LinkedIn compose URL for browser-based posting
-4. **Browser-based posting** is the first-class option for long content. LinkedIn's web UI handles text correctly without truncation.
+2. **Under 2500 chars**: Safe to post via API directly
+3. **2500-3000 chars**: Use `--draft` for safety, or publish directly at user's discretion
+4. **Over 3000 chars**: **Always use `--draft`** to avoid public truncation
 
-### Preview mode usage:
+### Draft mode (RECOMMENDED for long posts):
 ```bash
-# Upload images without posting:
+# Create as draft with images - never publicly truncated:
+python3 linkedin-api.py post-multi-image --draft --text-file /tmp/post.txt --images img1.png img2.png
+
+# Text-only draft:
+python3 linkedin-api.py post-text --draft --text-file /tmp/post.txt
+```
+
+After `--draft`:
+- The post is saved as a draft on LinkedIn (not published)
+- Images are correctly attached via the API
+- Open `https://www.linkedin.com/post/new/drafts` to review
+- Edit text if truncated, then publish from the web UI
+- **LinkedIn allows only ONE draft at a time** - publish or delete existing drafts before creating a new one
+
+### Preview mode (upload-only, no draft created):
+```bash
+# Upload images without posting or creating a draft:
 python3 linkedin-api.py post-multi-image --preview --text-file /tmp/post.txt --images img1.png img2.png
 
 # Text-only preview (validates length):
 python3 linkedin-api.py post-text --preview --text-file /tmp/post.txt
 ```
+
+### When to use --draft vs --preview:
+- **--draft**: Creates a draft with images attached. Best when images are part of the post and text needs editing. The draft exists on LinkedIn's servers.
+- **--preview**: Uploads images but creates nothing. Best when the user wants full control via the compose page. No draft is stored.
 
 ## Author URN
 
@@ -80,11 +96,13 @@ The person ID comes from `/v2/userinfo` (the `sub` field) after OAuth with `open
 
 ## Known API Limitations
 
-- **Silent text truncation**: The Posts API silently truncates `commentary` text at ~3000 characters. No error is returned - the post is created successfully but with shortened text. Always validate text length before creation. Use `--preview` mode for posts near or over the limit.
+- **Silent text truncation**: The Posts API silently truncates `commentary` text at ~3000 characters. No error is returned - the post is created successfully but with shortened text. Always validate text length before creation. Use `--draft` mode for posts near or over the limit - the truncated text is never public and can be fixed before publishing.
 - **PARTIAL_UPDATE unreliable for commentary**: `X-RestLi-Method: PARTIAL_UPDATE` with `patch: {"$set": {"commentary": "..."}}` returns 204 but may not actually update the text. Do not rely on it to fix truncated posts.
 - **Browser editing works**: If text is truncated, edit via LinkedIn's web UI. The internal web APIs correctly handle text updates.
 - **Always use --text-file**: Pass post text via a temp file (`--text-file /tmp/linkedin_post.txt`) rather than `--text` on the command line to avoid shell quoting issues with multi-line or special-character text.
-- **Preview mode available**: All `post-*` commands support `--preview` to upload media and validate text without creating the post.
+- **Draft mode available**: All `post-*` commands support `--draft` to create the post as a draft (images attached, text editable before publish). LinkedIn limits you to one draft at a time.
+- **Preview mode available**: All `post-*` commands support `--preview` to upload media and validate text without creating the post or a draft.
+- **Draft URL**: `https://www.linkedin.com/post/new/drafts` - navigate here to find, edit, and publish drafts.
 
 ## Common Errors
 
@@ -127,4 +145,4 @@ The `commentUrn` is composite: `urn:li:comment:(urn:li:activity:xxx,commentId)`.
 
 The LinkedIn API scripts are at `${CLAUDE_PLUGIN_ROOT}/scripts/`:
 - `oauth-server.py` - OAuth 2.0 flow with local callback server
-- `linkedin-api.py` - Post creation, image upload, auth check, post verification, preview mode
+- `linkedin-api.py` - Post creation, image upload, auth check, post verification, draft mode, preview mode

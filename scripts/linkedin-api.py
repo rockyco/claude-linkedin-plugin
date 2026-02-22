@@ -157,8 +157,13 @@ def upload_image(access_token, person_urn, image_path):
     return image_urn
 
 
-def create_post(access_token, person_urn, text, content=None, visibility="PUBLIC"):
-    """Create a LinkedIn post."""
+def create_post(access_token, person_urn, text, content=None, visibility="PUBLIC",
+                lifecycle_state="PUBLISHED"):
+    """Create a LinkedIn post.
+
+    Args:
+        lifecycle_state: "PUBLISHED" (default) or "DRAFT" to save without publishing.
+    """
     post_data = {
         "author": person_urn,
         "commentary": text,
@@ -168,7 +173,7 @@ def create_post(access_token, person_urn, text, content=None, visibility="PUBLIC
             "targetEntities": [],
             "thirdPartyDistributionChannels": [],
         },
-        "lifecycleState": "PUBLISHED",
+        "lifecycleState": lifecycle_state,
         "isReshareDisabledByAuthor": False,
     }
 
@@ -180,15 +185,25 @@ def create_post(access_token, person_urn, text, content=None, visibility="PUBLIC
 
     post_id = resp["headers"].get("x-restli-id", resp["headers"].get("X-Restli-Id", ""))
 
-    # Verify the post text was stored correctly
-    if post_id:
-        verify_post_text(access_token, post_id, text)
+    # Verify the post text was stored correctly (skip for drafts - they'll be edited)
+    verify_result = None
+    if post_id and lifecycle_state == "PUBLISHED":
+        verify_result = verify_post_text(access_token, post_id, text)
 
-    return post_id
+    return post_id, verify_result
 
 
 def verify_post_text(access_token, post_id, expected_text):
-    """Fetch the created post and verify its commentary matches what was sent."""
+    """Fetch the created post and verify its commentary matches what was sent.
+
+    Returns a dict with verification details:
+        verified (bool): True if stored text >= sent text length
+        sent_len (int): Number of chars sent
+        stored_len (int): Number of chars stored by LinkedIn
+        stored_text (str): The text LinkedIn actually stored
+        missing_text (str): The portion that was truncated (empty if no truncation)
+    Returns None if verification failed (API error).
+    """
     headers = get_api_headers(access_token)
     encoded_urn = urllib.parse.quote(post_id, safe="")
     try:
@@ -196,6 +211,13 @@ def verify_post_text(access_token, post_id, expected_text):
         stored = resp["body"].get("commentary", "")
         sent_len = len(expected_text)
         stored_len = len(stored)
+        result = {
+            "verified": stored_len >= sent_len,
+            "sent_len": sent_len,
+            "stored_len": stored_len,
+            "stored_text": stored,
+            "missing_text": expected_text[stored_len:] if stored_len < sent_len else "",
+        }
         if stored_len < sent_len:
             print(f"WARNING=Text truncated by LinkedIn API: sent {sent_len} chars, "
                   f"stored {stored_len} chars ({stored_len * 100 // sent_len}%)",
@@ -206,8 +228,10 @@ def verify_post_text(access_token, post_id, expected_text):
                   file=sys.stderr)
         else:
             print(f"VERIFIED=Post text intact ({stored_len} chars)", file=sys.stderr)
+        return result
     except SystemExit:
         print("WARNING=Could not verify post text (API read failed)", file=sys.stderr)
+        return None
 
 
 def validate_text_length(text, warn_threshold=3000):
@@ -250,6 +274,27 @@ def cmd_check_auth(args):
     print(f"TOKEN_DAYS_LEFT={days_left}")
 
 
+def _handle_post_result(post_id, verify_result, text, is_draft=False):
+    """Common output handling for post creation results."""
+    if is_draft:
+        print(f"DRAFT_CREATED=Post saved as draft")
+        print(f"POST_ID={post_id}")
+        print(f"DRAFT_URL=https://www.linkedin.com/post/new/drafts")
+        print(f"ACTION=Open the drafts page to review, edit text if needed, and publish")
+        return
+
+    print(f"SUCCESS=Post created")
+    print(f"POST_ID={post_id}")
+
+    if verify_result and not verify_result["verified"]:
+        print(f"TRUNCATION_DETECTED=sent {verify_result['sent_len']} chars, "
+              f"stored {verify_result['stored_len']} chars")
+        if verify_result["missing_text"]:
+            print(f"MISSING_TEXT_START={verify_result['missing_text'][:200]}")
+        print(f"EDIT_URL=https://www.linkedin.com/feed/")
+        print(f"ACTION=Edit the post via LinkedIn web UI to append the missing text")
+
+
 def cmd_post_text(args):
     """Post text-only content."""
     settings = load_settings()
@@ -263,14 +308,17 @@ def cmd_post_text(args):
         print("COMPOSE_URL=https://www.linkedin.com/feed/?shareActive=true")
         return
 
-    post_id = create_post(
+    is_draft = getattr(args, "draft", False)
+    lifecycle = "DRAFT" if is_draft else "PUBLISHED"
+
+    post_id, verify_result = create_post(
         settings["access_token"],
         settings["person_urn"],
         text,
         visibility=args.visibility,
+        lifecycle_state=lifecycle,
     )
-    print(f"SUCCESS=Post created")
-    print(f"POST_ID={post_id}")
+    _handle_post_result(post_id, verify_result, text, is_draft=is_draft)
 
 
 def cmd_post_image(args):
@@ -300,10 +348,13 @@ def cmd_post_image(args):
         }
     }
 
-    post_id = create_post(token, urn, text, content=content,
-                          visibility=args.visibility)
-    print(f"SUCCESS=Post with image created")
-    print(f"POST_ID={post_id}")
+    is_draft = getattr(args, "draft", False)
+    lifecycle = "DRAFT" if is_draft else "PUBLISHED"
+
+    post_id, verify_result = create_post(token, urn, text, content=content,
+                                         visibility=args.visibility,
+                                         lifecycle_state=lifecycle)
+    _handle_post_result(post_id, verify_result, text, is_draft=is_draft)
 
 
 def cmd_post_multi_image(args):
@@ -350,10 +401,13 @@ def cmd_post_multi_image(args):
         }
     }
 
-    post_id = create_post(token, urn, text, content=content,
-                          visibility=args.visibility)
-    print(f"SUCCESS=Post with {len(image_urns)} images created")
-    print(f"POST_ID={post_id}")
+    is_draft = getattr(args, "draft", False)
+    lifecycle = "DRAFT" if is_draft else "PUBLISHED"
+
+    post_id, verify_result = create_post(token, urn, text, content=content,
+                                         visibility=args.visibility,
+                                         lifecycle_state=lifecycle)
+    _handle_post_result(post_id, verify_result, text, is_draft=is_draft)
 
 
 def cmd_post_article(args):
@@ -390,10 +444,13 @@ def cmd_post_article(args):
 
     content = {"article": article}
 
-    post_id = create_post(token, urn, text, content=content,
-                          visibility=args.visibility)
-    print(f"SUCCESS=Article post created")
-    print(f"POST_ID={post_id}")
+    is_draft = getattr(args, "draft", False)
+    lifecycle = "DRAFT" if is_draft else "PUBLISHED"
+
+    post_id, verify_result = create_post(token, urn, text, content=content,
+                                         visibility=args.visibility,
+                                         lifecycle_state=lifecycle)
+    _handle_post_result(post_id, verify_result, text, is_draft=is_draft)
 
 
 def cmd_get_post(args):
@@ -545,6 +602,8 @@ def main():
     p.add_argument("--visibility", default="PUBLIC", choices=["PUBLIC", "CONNECTIONS"])
     p.add_argument("--preview", action="store_true",
                    help="Validate text length without posting. Prints compose URL.")
+    p.add_argument("--draft", action="store_true",
+                   help="Save as draft instead of publishing. Edit and publish via LinkedIn web UI.")
 
     # post-image
     p = sub.add_parser("post-image", help="Create a post with one image")
@@ -556,6 +615,8 @@ def main():
     p.add_argument("--visibility", default="PUBLIC", choices=["PUBLIC", "CONNECTIONS"])
     p.add_argument("--preview", action="store_true",
                    help="Upload image and validate text without posting.")
+    p.add_argument("--draft", action="store_true",
+                   help="Save as draft instead of publishing. Edit and publish via LinkedIn web UI.")
 
     # post-multi-image
     p = sub.add_parser("post-multi-image", help="Create a post with multiple images")
@@ -567,6 +628,8 @@ def main():
     p.add_argument("--visibility", default="PUBLIC", choices=["PUBLIC", "CONNECTIONS"])
     p.add_argument("--preview", action="store_true",
                    help="Upload images and validate text without posting.")
+    p.add_argument("--draft", action="store_true",
+                   help="Save as draft instead of publishing. Edit and publish via LinkedIn web UI.")
 
     # post-article
     p = sub.add_parser("post-article", help="Create a post with an article link")
@@ -580,6 +643,8 @@ def main():
     p.add_argument("--visibility", default="PUBLIC", choices=["PUBLIC", "CONNECTIONS"])
     p.add_argument("--preview", action="store_true",
                    help="Upload thumbnail and validate text without posting.")
+    p.add_argument("--draft", action="store_true",
+                   help="Save as draft instead of publishing. Edit and publish via LinkedIn web UI.")
 
     # upload-image
     p = sub.add_parser("upload-image", help="Upload an image and get its URN")

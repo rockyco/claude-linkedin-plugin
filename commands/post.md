@@ -47,7 +47,7 @@ If the user's intent is unclear, use AskUserQuestion to clarify:
 
 Review the post text with the user before publishing:
 - Show them the full text that will be posted
-- **Check text length**: if over 3000 characters, warn the user that LinkedIn may silently truncate it. Suggest trimming or using preview mode (Step 4a).
+- **Check text length**: if over 3000 characters, warn the user that LinkedIn may silently truncate it. Recommend draft mode (Step 4b) or preview mode (Step 4a).
 - List any images that will be uploaded
 - Show the visibility setting
 - Ask for confirmation before publishing
@@ -87,10 +87,9 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/linkedin-api.py post-article --text-file /
 
 ## Step 4a: Preview mode (for long posts or when user prefers browser posting)
 
-Use `--preview` to upload media without creating the post. This is recommended when:
-- Text exceeds 3000 characters
-- User wants to review/edit in LinkedIn's web UI before publishing
-- Previous posts were truncated by the API
+Use `--preview` to upload media without creating the post. This is useful when:
+- User wants to compose entirely in-browser
+- No draft should exist on LinkedIn's servers
 
 ```bash
 # Upload images without posting:
@@ -102,6 +101,46 @@ After preview:
 2. Show the compose URL: https://www.linkedin.com/feed/?shareActive=true
 3. Tell the user to paste their text and compose in-browser
 4. Optionally use Playwright browser tools to help navigate to the compose page
+
+## Step 4b: Draft-then-edit workflow (RECOMMENDED for posts near or over 3000 chars)
+
+Use `--draft` to create the post as a draft via the API. This is the **preferred approach** because:
+- Images are correctly attached by the API (multi-image handling works)
+- Text that may be truncated is never published publicly
+- The user can review and fix everything in LinkedIn's web UI before publishing
+
+**Decision logic:**
+- Under 2500 chars: safe to publish directly (Step 4)
+- 2500-3000 chars: either direct publish or draft (user preference)
+- Over 3000 chars: **always use --draft** to avoid public truncation
+
+```bash
+# Create as draft (images attached, text may truncate in draft - that's fine):
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/linkedin-api.py post-multi-image --draft --text-file /tmp/linkedin_post.txt --images "/path/to/img1.png" "/path/to/img2.png"
+```
+
+After draft creation, use Playwright to help the user edit and publish:
+
+1. Navigate to the drafts page:
+   - Use `browser_navigate` to open `https://www.linkedin.com/post/new/drafts`
+   - Take a snapshot to see the drafts list
+
+2. Find and open the draft:
+   - Look for the most recent draft in the snapshot
+   - Click the edit button (usually a pencil icon or "Edit" text)
+
+3. If text was truncated (the script will report this):
+   - Take a snapshot of the editor to see current text
+   - Click into the text area
+   - Select all text (Ctrl+A) and delete it
+   - Type/paste the full text from the text file
+   - Alternatively, position cursor at truncation point and append the missing text
+
+4. Review and publish:
+   - Take a screenshot for user confirmation
+   - Click the "Post" or "Publish" button when user confirms
+
+**Important**: LinkedIn only allows ONE draft at a time. If the user has an existing draft, it must be published or deleted before creating a new one via the API.
 
 ## Step 5: Verify and confirm
 
@@ -128,4 +167,5 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/linkedin-api.py get-post --post-id "POST_I
 - The REST API PARTIAL_UPDATE for commentary returns 204 but may not actually update the text. Browser editing is the reliable fallback.
 - Always show the user the full post content and ask for confirmation before publishing
 - Always use --text-file instead of --text to avoid shell quoting issues and ensure the full text is sent
-- When in doubt, use `--preview` mode to upload media safely and let the user finalize in-browser
+- When in doubt about text length, use `--draft` mode to create a draft with images attached, then edit and publish via LinkedIn's web UI
+- Use `--preview` mode only when the user explicitly wants to compose entirely in-browser without creating a draft
