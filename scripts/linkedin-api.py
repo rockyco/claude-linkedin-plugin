@@ -210,6 +210,22 @@ def verify_post_text(access_token, post_id, expected_text):
         print("WARNING=Could not verify post text (API read failed)", file=sys.stderr)
 
 
+def validate_text_length(text, warn_threshold=3000):
+    """Check text length and warn if it exceeds LinkedIn's limit.
+
+    Returns True if text is within safe limits, False if over threshold.
+    """
+    length = len(text)
+    if length > warn_threshold:
+        print(f"WARNING=Text is {length} chars, exceeds LinkedIn's ~{warn_threshold} char limit. "
+              f"Post may be silently truncated by the API.", file=sys.stderr)
+        print(f"RECOMMEND=Use --preview to upload images without posting, "
+              f"then paste text via LinkedIn's web UI.", file=sys.stderr)
+        return False
+    print(f"TEXT_LENGTH={length} chars (limit ~{warn_threshold})", file=sys.stderr)
+    return True
+
+
 def resolve_text(args):
     """Get post text from --text or --text-file argument."""
     if hasattr(args, "text_file") and args.text_file:
@@ -238,6 +254,15 @@ def cmd_post_text(args):
     """Post text-only content."""
     settings = load_settings()
     text = resolve_text(args)
+    validate_text_length(text)
+
+    if args.preview:
+        print("PREVIEW=Text-only post (no media to upload)")
+        print(f"TEXT_LENGTH={len(text)} chars")
+        print(f"TEXT_START={text[:120]}...")
+        print("COMPOSE_URL=https://www.linkedin.com/feed/?shareActive=true")
+        return
+
     post_id = create_post(
         settings["access_token"],
         settings["person_urn"],
@@ -254,9 +279,19 @@ def cmd_post_image(args):
     token = settings["access_token"]
     urn = settings["person_urn"]
     text = resolve_text(args)
+    validate_text_length(text)
 
     image_urn = upload_image(token, urn, args.images[0])
     print(f"IMAGE_URN={image_urn}", file=sys.stderr)
+
+    if args.preview:
+        print(f"PREVIEW=Single image post")
+        print(f"IMAGE_URN={image_urn}")
+        print(f"TEXT_LENGTH={len(text)} chars")
+        print(f"TEXT_START={text[:120]}...")
+        print("COMPOSE_URL=https://www.linkedin.com/feed/?shareActive=true")
+        print("NOTE=Image uploaded. Paste text and attach uploaded image via LinkedIn web UI.")
+        return
 
     content = {
         "media": {
@@ -277,6 +312,7 @@ def cmd_post_multi_image(args):
     token = settings["access_token"]
     urn = settings["person_urn"]
     text = resolve_text(args)
+    validate_text_length(text)
 
     if len(args.images) < 2:
         print("ERROR=Multi-image posts require at least 2 images.", file=sys.stderr)
@@ -287,6 +323,18 @@ def cmd_post_multi_image(args):
         print(f"UPLOADING={i+1}/{len(args.images)} {img_path}", file=sys.stderr)
         image_urn = upload_image(token, urn, img_path)
         image_urns.append(image_urn)
+
+    if args.preview:
+        print(f"PREVIEW=Multi-image post ({len(image_urns)} images uploaded)")
+        for i, urn_val in enumerate(image_urns):
+            print(f"IMAGE_{i+1}_URN={urn_val}")
+        print(f"TEXT_LENGTH={len(text)} chars")
+        print(f"TEXT_START={text[:120]}...")
+        print("COMPOSE_URL=https://www.linkedin.com/feed/?shareActive=true")
+        print("NOTE=Images uploaded to LinkedIn. To use them: compose a new post in "
+              "LinkedIn's web UI, paste your text, and the uploaded images will be "
+              "available in your media library.")
+        return
 
     images_payload = []
     alt_texts = args.alt_texts or []
@@ -314,6 +362,22 @@ def cmd_post_article(args):
     token = settings["access_token"]
     urn = settings["person_urn"]
     text = resolve_text(args)
+    validate_text_length(text)
+
+    if args.preview:
+        thumbnail_urn = None
+        if args.thumbnail:
+            thumbnail_urn = upload_image(token, urn, args.thumbnail)
+        print(f"PREVIEW=Article post")
+        print(f"ARTICLE_URL={args.url}")
+        if args.title:
+            print(f"ARTICLE_TITLE={args.title}")
+        if thumbnail_urn:
+            print(f"THUMBNAIL_URN={thumbnail_urn}")
+        print(f"TEXT_LENGTH={len(text)} chars")
+        print(f"TEXT_START={text[:120]}...")
+        print("COMPOSE_URL=https://www.linkedin.com/feed/?shareActive=true")
+        return
 
     article = {"source": args.url}
     if args.title:
@@ -479,6 +543,8 @@ def main():
     g.add_argument("--text", help="Post text content")
     g.add_argument("--text-file", help="Path to file containing post text")
     p.add_argument("--visibility", default="PUBLIC", choices=["PUBLIC", "CONNECTIONS"])
+    p.add_argument("--preview", action="store_true",
+                   help="Validate text length without posting. Prints compose URL.")
 
     # post-image
     p = sub.add_parser("post-image", help="Create a post with one image")
@@ -488,6 +554,8 @@ def main():
     p.add_argument("--images", nargs=1, required=True, help="Path to image file")
     p.add_argument("--title", default="", help="Image title")
     p.add_argument("--visibility", default="PUBLIC", choices=["PUBLIC", "CONNECTIONS"])
+    p.add_argument("--preview", action="store_true",
+                   help="Upload image and validate text without posting.")
 
     # post-multi-image
     p = sub.add_parser("post-multi-image", help="Create a post with multiple images")
@@ -497,6 +565,8 @@ def main():
     p.add_argument("--images", nargs="+", required=True, help="Paths to image files (2-20)")
     p.add_argument("--alt-texts", nargs="*", help="Alt text for each image")
     p.add_argument("--visibility", default="PUBLIC", choices=["PUBLIC", "CONNECTIONS"])
+    p.add_argument("--preview", action="store_true",
+                   help="Upload images and validate text without posting.")
 
     # post-article
     p = sub.add_parser("post-article", help="Create a post with an article link")
@@ -508,6 +578,8 @@ def main():
     p.add_argument("--description", default="", help="Article description")
     p.add_argument("--thumbnail", default="", help="Path to thumbnail image")
     p.add_argument("--visibility", default="PUBLIC", choices=["PUBLIC", "CONNECTIONS"])
+    p.add_argument("--preview", action="store_true",
+                   help="Upload thumbnail and validate text without posting.")
 
     # upload-image
     p = sub.add_parser("upload-image", help="Upload an image and get its URN")

@@ -38,8 +38,33 @@ Content-Type: application/json
 - Use line breaks for readability (LinkedIn preserves whitespace)
 - Hashtags at the end, 3-5 max, relevant to topic
 - Tag people with @mentions where appropriate
-- No strict character limit but aim for under 3000 characters
+- **Character limit: ~3000 characters**. The REST API silently truncates longer text with no error. Always validate before posting.
+- Aim for 1500-2000 characters for optimal engagement
 - Use unicode characters for bullet points if needed
+
+## Character Limit and Truncation
+
+**Critical**: LinkedIn's Posts REST API silently truncates `commentary` text at approximately 3000 characters. There is no error or warning from the API - the post is created with shortened text.
+
+### Recommended workflow for long posts:
+
+1. **Always validate text length** before posting using `validate_text_length()` (built into linkedin-api.py)
+2. **Under 3000 chars**: Safe to post via API directly
+3. **Over 3000 chars**: Use `--preview` mode:
+   - Uploads images to LinkedIn (returns URNs)
+   - Validates text length (prints warning)
+   - Does NOT create the post
+   - Prints LinkedIn compose URL for browser-based posting
+4. **Browser-based posting** is the first-class option for long content. LinkedIn's web UI handles text correctly without truncation.
+
+### Preview mode usage:
+```bash
+# Upload images without posting:
+python3 linkedin-api.py post-multi-image --preview --text-file /tmp/post.txt --images img1.png img2.png
+
+# Text-only preview (validates length):
+python3 linkedin-api.py post-text --preview --text-file /tmp/post.txt
+```
 
 ## Author URN
 
@@ -55,10 +80,11 @@ The person ID comes from `/v2/userinfo` (the `sub` field) after OAuth with `open
 
 ## Known API Limitations
 
-- **Silent text truncation**: The Posts API may silently truncate `commentary` text server-side. There is no error returned - the post is created successfully but with shortened text. Always verify after creation by reading the post back via `GET /rest/posts/{encoded_urn}`.
+- **Silent text truncation**: The Posts API silently truncates `commentary` text at ~3000 characters. No error is returned - the post is created successfully but with shortened text. Always validate text length before creation. Use `--preview` mode for posts near or over the limit.
 - **PARTIAL_UPDATE unreliable for commentary**: `X-RestLi-Method: PARTIAL_UPDATE` with `patch: {"$set": {"commentary": "..."}}` returns 204 but may not actually update the text. Do not rely on it to fix truncated posts.
 - **Browser editing works**: If text is truncated, edit via LinkedIn's web UI. The internal web APIs correctly handle text updates.
 - **Always use --text-file**: Pass post text via a temp file (`--text-file /tmp/linkedin_post.txt`) rather than `--text` on the command line to avoid shell quoting issues with multi-line or special-character text.
+- **Preview mode available**: All `post-*` commands support `--preview` to upload media and validate text without creating the post.
 
 ## Common Errors
 
@@ -101,4 +127,4 @@ The `commentUrn` is composite: `urn:li:comment:(urn:li:activity:xxx,commentId)`.
 
 The LinkedIn API scripts are at `${CLAUDE_PLUGIN_ROOT}/scripts/`:
 - `oauth-server.py` - OAuth 2.0 flow with local callback server
-- `linkedin-api.py` - Post creation, image upload, auth check, post verification
+- `linkedin-api.py` - Post creation, image upload, auth check, post verification, preview mode
