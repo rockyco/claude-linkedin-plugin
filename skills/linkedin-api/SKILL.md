@@ -140,7 +140,22 @@ Default to **clean technical-diagram style**, not marketing-social style. Carous
 
 **Minimum in-slide font is still 24 pt** — but a dense technical slide with 17-22 pt body text inside 60+ px card sections reads well because the card itself acts as visual structure. A slide with one giant 80 pt headline and nothing else reads as "AI slop" even though it passes the minimum-font check.
 
-**Reference / reuse rule:** if the same article has a Chinese WeChat version with clean technical diagrams, create the English carousel by re-authoring those diagrams at 1080×1080 in English — preserve the same visual language across language versions. Do not redesign from scratch; the brand / credibility signal is the style consistency.
+**Reference / reuse rule:** if the same article has a Chinese WeChat version with clean technical diagrams, re-author **those actual diagrams** at 1080×1080 in English (the full system/micro-architecture, the real datapath, the specific schematic) — do NOT downgrade them to plain text-block slides with one big number. The rich figure is the credibility signal. Plain blocks read as "AI slop". Always pull the source article's diagrams first and mirror their content.
+
+### Style rotation (vary the look every post)
+
+Reusing one visual template post after post makes the feed look templated and lowers credibility — a real failure: a new carousel was rejected because it looked identical to the author's previous posts (same light-blue frame + slate pill ribbon + royal-blue accent + big-number card). **Rotate the style.** Each post picks a preset that differs from the **immediately previous** post (ideally random among the rest), and that fits the story's tone.
+
+Record the choice in the bundle as a one-line `STYLE.txt` (e.g., `dark-scope`). Before authoring, read the most recent bundle's `STYLE.txt` (or eyeball the prior slides) and pick a different preset.
+
+Credible preset palette (every preset still obeys: min 24 pt, dense figures with 3+ blocks, no AI-marketing gradients / glow / hexagon-circuit decorations):
+- **light-blueprint** — white canvas, teal ink + monospace technical labels, datasheet-figure look.
+- **dark-scope** — dark navy canvas (`#0b1220`), monospace signal/cycle labels, muted neon green/red/cyan, a FAINT line grid (not dotted), terminal/diff panels; reads like a logic analyzer. Best for timing / debug / cycle-accurate stories. Keep neon muted (no glow halos).
+- **light-pastel-cards** — white canvas, pastel rounded cards, slate ribbons (the classic default; use only if the previous post was NOT this).
+- **editorial** — off-white, large ink typography + one warm accent (amber), big single-focus figures. Best for opinion / strategy pieces.
+- **slate-mono** — light slate canvas, near-monochrome ink + one accent, monospace throughout, minimal.
+
+Match preset to tone: a debugging / timing story suits dark-scope or blueprint; a strategy piece suits editorial. Whatever the preset, re-author the article's real diagrams in it.
 
 ## Post Text Best Practices
 
