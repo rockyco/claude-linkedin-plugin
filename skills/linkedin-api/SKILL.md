@@ -157,6 +157,29 @@ Credible preset palette (every preset still obeys: min 24 pt, dense figures with
 
 Match preset to tone: a debugging / timing story suits dark-scope or blueprint; a strategy piece suits editorial. Whatever the preset, re-author the article's real diagrams in it.
 
+**Default to LIGHT presets when in doubt.** Dark-scope can look great in your own preview but darkens further at LinkedIn's thumbnail compression, and dark backgrounds are unforgiving of low-contrast secondary text (muted slate-on-navy turns illegible). Failure case (2026-05-30 ai-rtl-bug-debug): a dark-scope deck was initially produced for a debug story but had readability issues on mobile thumbnail — user explicitly requested a switch to light. The fix went to `light-pastel-cards` and reads cleanly at every zoom level. Rule: if the story tone suits dark-scope, build it AND verify at thumbnail size before committing. If any text relies on subtle slate-on-dark for hierarchy, switch to a light preset; dark-scope only wins when the deck is dominated by monospace signal/cycle labels with no narrative prose.
+
+### Glossing domain terms for adjacent-specialty readers
+
+LinkedIn's "technical audience" is not monolithic. An FPGA engineer reading an LDPC post does not necessarily know what `K_avg` means; a hardware verification engineer reading an HFT post does not necessarily know `mid-price` or `TWAP`. Even when the audience is technical, the cross-pollination between sub-specialties is high, and an unexplained domain term is the most common reason a reader bounces from the carousel before slide 3.
+
+**Two-tier label pattern for domain terms in diagrams:** put the technical definition as the primary label, the plain-language gloss as a smaller subtitle below.
+
+```
+K_avg = iters per codeword   <-- 24 pt bold, the precise definition
+(one LDPC frame)             <-- 18 pt italic, the friendly gloss
+```
+
+In the post text, define every domain term on first appearance with a parenthetical gloss, then use the term freely afterward:
+
+```
+Bad:  "The 4× K_avg gap stayed."
+Good: "The 4× K_avg gap (K_avg = average iterations to decode one codeword,
+       i.e. one LDPC frame) stayed."
+```
+
+Apply to: every algorithm metric (K, BER, EVM, NMSE), every hardware-block acronym (FE, BE, CNU, BRAM, LUTRAM, SRL), and every project-specific signal name that drives the narrative (first_iter, sum_old, branch_mem). Audience expansion is free; assumed knowledge has a cost.
+
 ## Post Text Best Practices
 
 ### Length & structure
